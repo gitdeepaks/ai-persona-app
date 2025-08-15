@@ -378,7 +378,7 @@ function ChatApp() {
       </div>
 
       {/* Left Sidebar - Contacts */}
-      <div className="w-80 glass-effect border-r border-white/20 dark:border-gray-700/50 flex flex-col relative z-10 hidden md:flex">
+      <div className="w-80 glass-effect border-r border-white/20 dark:border-gray-700/50 flex flex-col relative z-10 md:flex">
         {/* Header */}
         <div className="p-6 border-b border-white/20 dark:border-gray-700/50">
           <div className="flex items-center gap-4 mb-6">
