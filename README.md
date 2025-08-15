@@ -1,6 +1,6 @@
 # AI Persona Chat App
 
-A modern, interactive chat application that simulates conversations with AI personas. This project features a WhatsApp-style interface where users can chat with AI-powered personas, specifically designed to mimic real personalities like Hitesh Choudhary and Piyush Garg, well-known tech educators and developers.
+> **Live Demo:** [https://ai-persona-app-five.vercel.app/](https://ai-persona-app-five.vercel.app/)
 
 ## 🚀 Features
 
