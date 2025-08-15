@@ -23,8 +23,28 @@ import {
   Settings,
   Info,
   Users,
+  Sparkles,
+  Zap,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import {
+  PersonaThemeProvider,
+  usePersonaTheme,
+  PersonaAvatar,
+  PersonaMessageBubble,
+  PersonaTypingIndicator,
+  PersonaQuickReplies,
+} from '@/components/persona-theme';
+import {
+  MessageBubble,
+  QuickReplies,
+  MessageReactions,
+} from '@/components/ui/message-bubble';
+import {
+  ConversationMemory,
+  useConversationMemory,
+  TopicSuggestions,
+} from '@/components/conversation-memory';
 
 interface Message {
   id: string;
@@ -33,6 +53,8 @@ interface Message {
   timestamp: Date;
   type?: 'text' | 'image';
   imageUrl?: string;
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'error';
+  reactions?: { emoji: string; count: number }[];
 }
 
 interface Contact {
@@ -45,7 +67,7 @@ interface Contact {
   unreadCount?: number;
 }
 
-export default function HiteshChat() {
+function ChatApp() {
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -53,8 +75,13 @@ export default function HiteshChat() {
   const [selectedContact, setSelectedContact] = useState('hitesh');
   const [showChatDetails, setShowChatDetails] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
+  const [showMemory, setShowMemory] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { theme, setPersona } = usePersonaTheme();
+  const { context, updateContext, addMessage, addTopic } =
+    useConversationMemory();
 
   // Ensure component is mounted on client side
   useEffect(() => {
@@ -80,12 +107,7 @@ export default function HiteshChat() {
   // Initialize messages on client side to prevent hydration mismatch
   useEffect(() => {
     const getInitialMessage = () => {
-      if (selectedContact === 'hitesh') {
-        return "Namaste! Main Hitesh hun, aapka tech mentor. Haan ji, kaise help kar sakta hun aaj? Whether it's Angular, JavaScript, ya koi bhi coding challenge - main yahan hun to guide you! 🚀";
-      } else if (selectedContact === 'piyush') {
-        return "Hey there! 👋 I'm Piyush Garg, your full-stack mentor and fellow developer. I'm passionate about making technology accessible to everyone. Whether you're learning React, Node.js, or building your next big project - I'm here to help you succeed! What would you like to work on today?";
-      }
-      return 'Hello! How can I help you today?';
+      return theme.personality.greeting;
     };
 
     setMessages([
@@ -94,9 +116,15 @@ export default function HiteshChat() {
         content: getInitialMessage(),
         isUser: false,
         timestamp: new Date(),
+        status: 'read',
       },
     ]);
-  }, [selectedContact]);
+  }, [selectedContact, theme.personality.greeting]);
+
+  // Update persona when contact changes
+  useEffect(() => {
+    setPersona(selectedContact);
+  }, [selectedContact, setPersona]);
 
   // Mock contacts data
   const contacts: Contact[] = [
@@ -137,9 +165,11 @@ export default function HiteshChat() {
       content: input,
       isUser: true,
       timestamp: new Date(),
+      status: 'sending',
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    addMessage();
     const currentInput = input;
     setInput('');
     setIsTyping(true);
@@ -185,9 +215,32 @@ export default function HiteshChat() {
           data.message || "Sorry, I couldn't process that. Please try again!",
         isUser: false,
         timestamp: new Date(),
+        status: 'sent',
       };
 
       setMessages((prev) => [...prev, botMessage]);
+
+      // Update message status to delivered after a short delay
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === userMessage.id
+              ? { ...msg, status: 'delivered' as const }
+              : msg
+          )
+        );
+      }, 1000);
+
+      // Update message status to read after another delay
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === userMessage.id
+              ? { ...msg, status: 'read' as const }
+              : msg
+          )
+        );
+      }, 2000);
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage: Message = {
@@ -198,6 +251,7 @@ export default function HiteshChat() {
             : 'Arre yaar, kuch technical issue aa gaya hai. Thoda wait karo aur phir try karo!',
         isUser: false,
         timestamp: new Date(),
+        status: 'error',
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -210,6 +264,29 @@ export default function HiteshChat() {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleQuickReply = (reply: string) => {
+    setInput(reply);
+    handleSend();
+  };
+
+  const handleTopicSelect = (topic: string) => {
+    addTopic(topic);
+    setInput(`Can you help me with ${topic}?`);
+  };
+
+  const handleReaction = (messageId: string, emoji: string) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              reactions: [...(msg.reactions || []), { emoji, count: 1 }],
+            }
+          : msg
+      )
+    );
   };
 
   const currentContact = contacts.find((c) => c.id === selectedContact);
@@ -284,7 +361,9 @@ export default function HiteshChat() {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex relative overflow-hidden">
+    <div
+      className={`h-screen bg-gradient-to-br ${theme.backgroundGradient} dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex relative overflow-hidden`}
+    >
       {/* Background Decorations */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl floating"></div>
@@ -455,6 +534,14 @@ export default function HiteshChat() {
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => setShowMemory(!showMemory)}
+                className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/30 dark:bg-gray-700/30 hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all duration-300"
+              >
+                <Sparkles className="h-4 w-4 md:h-5 md:w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/30 dark:bg-gray-700/30 hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all duration-300"
               >
                 <Search className="h-4 w-4 md:h-5 md:w-5" />
@@ -496,60 +583,45 @@ export default function HiteshChat() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6">
           {messages.map((message, index) => (
-            <div
-              key={message.id}
-              className={`flex gap-3 md:gap-4 ${
-                message.isUser ? 'justify-end' : 'justify-start'
-              } fade-in-up`}
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              {!message.isUser && (
-                <Avatar className="h-8 w-8 md:h-10 md:w-10 mt-2 ring-2 ring-white/50 dark:ring-gray-600/50">
-                  <AvatarImage
-                    src={
-                      selectedContact === 'piyush'
-                        ? 'https://avatars.githubusercontent.com/u/44976328?v=4'
-                        : 'https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.piyushgarg.dev%2F&psig=AOvVaw059uOTM4RUcCoPL7DzQ_Fd&ust=1755325951634000&source=images&cd=vfe&opi=89978449&ved=0CBIQjRxqFwoTCMjotvCYjI8DFQAAAAAdAAAAABAE'
-                    }
-                    alt={selectedContact === 'piyush' ? 'Piyush' : 'Hitesh'}
-                    className="object-cover"
-                  />
-                  <AvatarFallback className="gradient-bg text-white font-semibold">
-                    {selectedContact === 'piyush' ? 'PG' : 'HC'}
-                  </AvatarFallback>
-                </Avatar>
+            <div key={message.id} style={{ animationDelay: `${index * 0.1}s` }}>
+              <MessageBubble
+                content={message.content}
+                isUser={message.isUser}
+                timestamp={message.timestamp}
+                avatar={
+                  !message.isUser
+                    ? selectedContact === 'piyush'
+                      ? 'https://avatars.githubusercontent.com/u/44976328?v=4'
+                      : 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/images-SVZkVpIgJRQjAFshcQjSTb8zXq3pva.jpeg'
+                    : undefined
+                }
+                initials={
+                  !message.isUser
+                    ? selectedContact === 'piyush'
+                      ? 'PG'
+                      : 'HC'
+                    : undefined
+                }
+                status={message.status}
+                className="fade-in-up"
+              />
+
+              {/* Message reactions */}
+              {message.reactions && message.reactions.length > 0 && (
+                <MessageReactions
+                  reactions={message.reactions}
+                  onReact={(emoji) => handleReaction(message.id, emoji)}
+                  className="ml-12"
+                />
               )}
-              <div
-                className={`max-w-[75%] md:max-w-[70%] ${
-                  message.isUser ? 'order-1' : ''
-                }`}
-              >
-                <div
-                  className={`rounded-2xl md:rounded-3xl px-4 md:px-6 py-3 md:py-4 message-bubble shadow-lg ${
-                    message.isUser
-                      ? 'gradient-bg text-white ml-auto'
-                      : 'glass-effect text-gray-900 dark:text-white'
-                  }`}
-                >
-                  <p className="text-sm leading-relaxed font-medium">
-                    {message.content}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 md:gap-3 mt-1 md:mt-2 px-2 md:px-3">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                    {message.timestamp.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                  {message.isUser && (
-                    <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-white/60"></div>
-                      <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-white/60"></div>
-                    </div>
-                  )}
-                </div>
-              </div>
+
+              {/* Quick replies for bot messages */}
+              {!message.isUser && index === messages.length - 1 && (
+                <PersonaQuickReplies
+                  onSelect={handleQuickReply}
+                  className="ml-12 mt-2"
+                />
+              )}
             </div>
           ))}
 
@@ -570,17 +642,7 @@ export default function HiteshChat() {
                 </AvatarFallback>
               </Avatar>
               <div className="glass-effect rounded-2xl md:rounded-3xl px-4 md:px-6 py-3 md:py-4 shadow-lg">
-                <div className="flex gap-1.5 md:gap-2">
-                  <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full typing-dot"></div>
-                  <div
-                    className="w-2.5 h-2.5 md:w-3 md:h-3 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full typing-dot"
-                    style={{ animationDelay: '0.1s' }}
-                  ></div>
-                  <div
-                    className="w-2.5 h-2.5 md:w-3 md:h-3 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full typing-dot"
-                    style={{ animationDelay: '0.2s' }}
-                  ></div>
-                </div>
+                <PersonaTypingIndicator />
               </div>
             </div>
           )}
@@ -792,6 +854,40 @@ export default function HiteshChat() {
         </div>
       )}
 
+      {/* Conversation Memory Sidebar */}
+      {showMemory && (
+        <div
+          className={`${
+            isMobile ? 'fixed inset-0 z-50' : 'w-80'
+          } glass-effect border-l border-white/20 dark:border-gray-700/50 flex flex-col relative z-10 slide-in`}
+        >
+          {/* Header */}
+          <div className="p-4 md:p-6 border-b border-white/20 dark:border-gray-700/50 flex items-center justify-between">
+            <h3 className="text-gray-900 dark:text-white font-bold text-lg md:text-xl gradient-text">
+              AI Memory
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMemory(false)}
+              className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-white/30 dark:bg-gray-700/30 hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all duration-300"
+            >
+              <X className="h-4 w-4 md:h-5 md:w-5" />
+            </Button>
+          </div>
+
+          {/* Memory Content */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+            <ConversationMemory
+              context={context}
+              onContextUpdate={updateContext}
+            />
+
+            <TopicSuggestions onTopicSelect={handleTopicSelect} />
+          </div>
+        </div>
+      )}
+
       {/* Mobile Contacts Sidebar */}
       {showContacts && (
         <div className="fixed inset-0 z-50 md:hidden">
@@ -929,5 +1025,13 @@ export default function HiteshChat() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function HiteshChat() {
+  return (
+    <PersonaThemeProvider>
+      <ChatApp />
+    </PersonaThemeProvider>
   );
 }
